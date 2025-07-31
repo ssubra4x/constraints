@@ -1,0 +1,329 @@
+// SystemVerilog Constraint Keywords and Operators Reference
+
+class constraint_examples;
+  rand bit [7:0]  value;
+  rand bit [7:0]  array[];
+  rand bit [3:0]  priority;
+  rand bit        enable;
+  rand bit [1:0]  mode;
+  rand bit [15:0] addr;
+  
+  //=============================================================================
+  // 1. CONSTRAINT DECLARATION KEYWORDS
+  //=============================================================================
+  
+  // Basic constraint declaration
+  constraint basic_c {
+    value > 10;
+    value < 100;
+  }
+  
+  // External constraint declaration (defined outside class)
+  extern constraint external_c;
+  
+  // Static constraint (shared across all instances)
+  static constraint static_c {
+    // Static constraints can only reference static variables
+  }
+  
+  //=============================================================================
+  // 2. MEMBERSHIP OPERATORS
+  //=============================================================================
+  
+  constraint membership_c {
+    // 'inside' - membership operator
+    value inside {[10:20], [30:40], 50, 60};  // Ranges and discrete values
+    
+    // '!inside' - not membership
+    priority !inside {0, 15};                  // Exclude specific values
+    
+    // Set membership with variables
+    mode inside {1, 2};                        // Only values 1 and 2
+  }
+  
+  //=============================================================================
+  // 3. DISTRIBUTION OPERATORS
+  //=============================================================================
+  
+  constraint distribution_c {
+    // 'dist' - weighted distribution
+    value dist {
+      [0:50]   := 40,    // 40% weight for range 0-50
+      [51:100] := 30,    // 30% weight for range 51-100
+      [101:150]:/ 20,    // 20% weight divided equally across range
+      200      := 10     // 10% weight for exactly 200
+    };
+    
+    // ':=' - per-item weight (each value gets full weight)
+    // ':/' - per-range weight (weight divided across range)
+  }
+  
+  //=============================================================================
+  // 4. IMPLICATION OPERATORS
+  //=============================================================================
+  
+  constraint implication_c {
+    // '->' - implication (if-then)
+    (enable == 1) -> (value > 50);
+    
+    // '<->' - equivalence (if and only if)
+    (mode == 3) <-> (priority > 8);
+    
+    // 'if-else' - conditional constraint
+    if (enable)
+      value inside {[100:200]};
+    else
+      value inside {[1:99]};
+  }
+  
+  //=============================================================================
+  // 5. LOGICAL OPERATORS
+  //=============================================================================
+  
+  constraint logical_c {
+    // '&&' - logical AND
+    (value > 10) && (value < 90);
+    
+    // '||' - logical OR  
+    (priority == 0) || (priority > 5);
+    
+    // '!' - logical NOT
+    !(value inside {[20:30]});
+    
+    // Parentheses for precedence
+    ((enable == 1) && (mode == 2)) -> (addr[1:0] == 0);
+  }
+  
+  //=============================================================================
+  // 6. ARRAY CONSTRAINT KEYWORDS
+  //=============================================================================
+  
+  constraint array_c {
+    // 'foreach' - iterate over array elements
+    foreach(array[i]) {
+      array[i] inside {[1:100]};
+      if (i > 0)
+        array[i] > array[i-1];  // Ascending order
+    }
+    
+    // Array methods
+    array.size() inside {[5:20]};           // Size constraint
+    array.sum() < 1000;                     // Sum of all elements
+    array.product() > 0;                    // Product of all elements
+    
+    // Array ordering
+    array.size() == 10;
+    foreach(array[j])
+      if (j < array.size()-1)
+        array[j] <= array[j+1];             // Non-decreasing order
+  }
+  
+  //=============================================================================
+  // 7. SOLVE-BEFORE KEYWORDS  
+  //=============================================================================
+  
+  constraint ordering_c {
+    // 'solve-before' - variable ordering
+    solve enable before value;              // Solve enable first
+    solve mode before priority;             // Then mode before priority
+    solve array.size() before array;       // Size before array contents
+  }
+  
+  //=============================================================================
+  // 8. RELATIONAL OPERATORS
+  //=============================================================================
+  
+  constraint relational_c {
+    // Standard relational operators
+    value >  10;     // Greater than
+    value <  200;    // Less than  
+    value >= 20;     // Greater than or equal
+    value <= 180;    // Less than or equal
+    value == 100;    // Equal to (assignment)
+    value != 0;      // Not equal to
+  }
+  
+  //=============================================================================
+  // 9. ARITHMETIC OPERATORS (in expressions)
+  //=============================================================================
+  
+  constraint arithmetic_c {
+    // Arithmetic in constraint expressions
+    (value + priority) < 150;
+    (addr % 4) == 0;                        // Modulo for alignment
+    (value * 2) inside {[100:400]};
+    (addr >> 2) < 1024;                     // Shift operations
+    (value & 8'hF0) == 0;                   // Bitwise AND
+    (priority | mode) != 0;                 // Bitwise OR
+  }
+  
+  //=============================================================================
+  // 10. SPECIAL CONSTRAINT FUNCTIONS
+  //=============================================================================
+  
+  constraint special_functions_c {
+    // $countbits - count bits with specific value
+    $countbits(value, '1) inside {[2:6]};   // 2-6 bits set to 1
+    
+    // $countones - count number of 1 bits  
+    $countones(addr) <= 8;                  // Max 8 ones in address
+    
+    // $onehot - exactly one bit set
+    $onehot(priority);                      // Only one bit can be 1
+    
+    // $onehot0 - zero or one bit set
+    $onehot0(mode);                         // Zero or one bit set
+    
+    // $isunknown - check for X/Z values
+    !$isunknown(value);                     // No X or Z values
+  }
+  
+  //=============================================================================
+  // 11. SOFT CONSTRAINTS
+  //=============================================================================
+  
+  constraint soft_c {
+    // 'soft' - soft constraint (lower priority)
+    soft value == 50;                       // Prefer value 50 if possible
+    soft priority inside {[5:10]};          // Prefer priority 5-10
+    
+    // Hard constraints override soft constraints
+    value inside {[1:100]};                 // This will override soft constraint if needed
+  }
+  
+  //=============================================================================
+  // 12. CONSTRAINT GUARD/CONDITIONAL
+  //=============================================================================
+  
+  constraint guard_c {
+    // Constraint guards using implication
+    (mode == 1) -> {
+      value inside {[10:50]};
+      priority > 3;
+    }
+    
+    // Multiple constraint block with if
+    if (enable) {
+      addr[1:0] == 0;    // Word aligned
+      value > 25;
+    }
+  }
+  
+  //=============================================================================
+  // 13. UNIQUE CONSTRAINTS
+  //=============================================================================
+  
+  constraint unique_c {
+    // 'unique' - all elements must be different
+    unique {array};                         // All array elements unique
+    
+    // Can be used with multiple variables
+    unique {value, priority, mode};         // All three must be different
+  }
+  
+  //=============================================================================
+  // 14. RANDOMIZE WITH INLINE CONSTRAINTS
+  //=============================================================================
+  
+  function void demonstrate_inline();
+    // 'with' keyword for inline constraints during randomize()
+    if (this.randomize() with {
+      value inside {[75:125]};              // Override existing constraints
+      local::priority == 5;                 // Force specific value
+      array.size() == 8;                    // Specific size
+    }) begin
+      $display("Randomization successful with inline constraints");
+    end
+  endfunction
+  
+endclass
+
+//=============================================================================
+// EXTERNAL CONSTRAINT DEFINITION
+//=============================================================================
+
+// External constraint implementation
+constraint constraint_examples::external_c {
+  addr inside {[16'h1000:16'h1FFF]};
+  (addr % 16) == 0;  // 16-byte aligned
+}
+
+//=============================================================================
+// CONSTRAINT CONTROL METHODS (called on constraint or variable)
+//=============================================================================
+
+class constraint_control_demo;
+  rand bit [7:0] data;
+  rand bit [3:0] cmd;
+  
+  constraint data_c { data inside {[10:100]}; }
+  constraint cmd_c  { cmd inside {[1:8]}; }
+  
+  function void demo_control();
+    // Constraint control methods
+    data_c.constraint_mode(0);             // Disable constraint
+    data_c.constraint_mode(1);             // Enable constraint
+    
+    // Variable randomization control  
+    data.rand_mode(0);                     // Make variable non-random
+    data.rand_mode(1);                     // Make variable random again
+    
+    // Check constraint/randomization status
+    if (data_c.constraint_mode())
+      $display("data_c constraint is enabled");
+    if (data.rand_mode())  
+      $display("data is random");
+  endfunction
+endclass
+
+//=============================================================================
+// SUMMARY OF ALL CONSTRAINT KEYWORDS
+//=============================================================================
+
+/*
+DECLARATION KEYWORDS:
+- constraint      : Declare constraint block
+- extern          : External constraint declaration  
+- static          : Static constraint
+- soft            : Soft constraint (lower priority)
+
+MEMBERSHIP OPERATORS:
+- inside          : Set membership
+- !inside         : Not in set
+
+DISTRIBUTION:
+- dist            : Weighted distribution
+- :=              : Per-item weight
+- :/              : Per-range weight
+
+LOGICAL/RELATIONAL:
+- if, else        : Conditional constraints
+- ->              : Implication
+- <->             : Equivalence  
+- &&, ||, !       : Logical AND, OR, NOT
+- ==, !=          : Equal, not equal
+- <, <=, >, >=    : Comparison operators
+
+ARRAY OPERATIONS:
+- foreach         : Array iteration
+- .size()         : Array size
+- .sum()          : Sum of elements
+- .product()      : Product of elements
+- unique          : All elements different
+
+CONTROL:
+- solve-before    : Variable solving order
+- with            : Inline constraints
+- local::         : Local scope in inline constraints
+
+SYSTEM FUNCTIONS:
+- $countbits      : Count specific bit values
+- $countones      : Count 1 bits
+- $onehot         : Exactly one bit set
+- $onehot0        : Zero or one bit set  
+- $isunknown      : Check for X/Z
+
+CONTROL METHODS:
+- constraint_mode() : Enable/disable constraints
+- rand_mode()     : Control variable randomization
+*/
