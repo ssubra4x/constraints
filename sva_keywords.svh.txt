@@ -1,0 +1,464 @@
+// SystemVerilog Assertions (SVA) Keywords and Operators Reference
+
+module sva_examples(
+  input logic clk,
+  input logic reset_n,
+  input logic req,
+  input logic ack,
+  input logic [7:0] data,
+  input logic valid,
+  input logic ready,
+  input logic [1:0] state
+);
+
+//=============================================================================
+// 1. ASSERTION DECLARATION KEYWORDS
+//=============================================================================
+
+// Basic assertion types
+assert property (@(posedge clk) req |-> ##1 ack);          // Immediate assertion
+assume property (@(posedge clk) !reset_n |-> !valid);      // Assumption
+cover property (@(posedge clk) req && ack);                // Coverage point
+
+// Named assertions with labels
+req_ack_check: assert property (@(posedge clk) req |-> ##1 ack)
+  else $error("Request not followed by acknowledge");
+
+// Assertion with success and failure actions
+data_valid_check: assert property (@(posedge clk) valid |-> data != 0)
+  $display("Data valid assertion passed")
+  else $error("Data is zero when valid is high");
+
+//=============================================================================
+// 2. PROPERTY DECLARATION KEYWORDS
+//=============================================================================
+
+// Property definition
+property req_to_ack;
+  @(posedge clk) req |-> ##1 ack;
+endproperty
+
+// Parameterized property
+property stable_for_n_cycles(signal, n);
+  @(posedge clk) $stable(signal)[*n];
+endproperty
+
+// Property with local variables
+property handshake_protocol;
+  logic [7:0] captured_data;
+  @(posedge clk) 
+  (req, captured_data = data) |-> ##1 (ack && (data == captured_data));
+endproperty
+
+//=============================================================================
+// 3. SEQUENCE DECLARATION KEYWORDS
+//=============================================================================
+
+// Basic sequence definition
+sequence req_seq;
+  @(posedge clk) req ##1 !req;
+endsequence
+
+// Parameterized sequence
+sequence wait_n_cycles(n);
+  @(posedge clk) ##n 1'b1;
+endsequence
+
+// Complex sequence with local variables
+sequence bus_transaction(start_sig, end_sig);
+  logic [7:0] addr;
+  @(posedge clk) (start_sig, addr = data) ##[1:5] (end_sig && (data == addr));
+endsequence
+
+//=============================================================================
+// 4. CLOCKING KEYWORDS
+//=============================================================================
+
+// Clocking events
+property clk_examples;
+  @(posedge clk)        req |-> ##1 ack;         // Positive edge
+  @(negedge clk)        valid |-> ready;         // Negative edge  
+  @(edge clk)           $stable(data);           // Any edge
+  @(posedge clk iff reset_n) req |-> ##1 ack;   // Conditional clocking
+endproperty
+
+// Multiple clock domains
+property multi_clock;
+  @(posedge clk) req |-> @(posedge clk) ##1 ack;
+endproperty
+
+//=============================================================================
+// 5. TEMPORAL OPERATORS
+//=============================================================================
+
+property temporal_ops;
+  @(posedge clk)
+  
+  // ## - Fixed delay operator
+  req |-> ##1 ack;                    // Exactly 1 cycle delay
+  req |-> ##[2:5] ack;                // 2 to 5 cycles delay
+  req |-> ##[1:$] ack;                // 1 to infinite cycles
+  
+  // [*] - Consecutive repetition
+  valid[*3];                          // valid high for exactly 3 cycles
+  valid[*2:5];                        // valid high for 2 to 5 cycles
+  valid[*0:$];                        // valid high for 0 to infinite cycles
+  
+  // [->] - Goto repetition (non-consecutive)
+  req[->3];                           // req goes high 3 times (not necessarily consecutive)
+  req[->1:5];                         // req goes high 1 to 5 times
+  
+  // [=] - Non-consecutive repetition ending when condition true
+  req[=3];                            // req true exactly 3 times, sequence ends on 3rd occurrence
+endproperty
+
+//=============================================================================
+// 6. IMPLICATION OPERATORS
+//=============================================================================
+
+property implication_ops;
+  @(posedge clk)
+  
+  // |-> - Overlapping implication
+  req |-> ack;                        // If req true, then ack must be true in same cycle
+  req |-> ##1 ack;                    // If req true, then ack must be true next cycle
+  
+  // |=> - Non-overlapping implication  
+  req |=> ack;                        // If req true, then ack must be true next cycle
+  req |=> ##2 ack;                    // If req true, then ack must be true 3 cycles later
+endproperty
+
+//=============================================================================
+// 7. LOGICAL OPERATORS IN SEQUENCES
+//=============================================================================
+
+property logical_ops;
+  @(posedge clk)
+  
+  // and - Both sequences must be true
+  (req ##1 ack) and (valid ##1 ready);
+  
+  // or - Either sequence must be true
+  (req ##1 ack) or (valid ##1 ready);
+  
+  // intersect - Both sequences true with same start/end points
+  (req ##[1:3] ack) intersect (valid ##[1:3] ready);
+  
+  // within - First sequence occurs within second sequence
+  (req ##1 ack) within (valid ##[0:5] ready);
+  
+  // throughout - Signal remains true throughout sequence
+  valid throughout (req ##1 ack ##1 done);
+endproperty
+
+//=============================================================================
+// 8. SYSTEM FUNCTIONS FOR ASSERTIONS
+//=============================================================================
+
+property system_functions;
+  @(posedge clk)
+  
+  // $rose - Signal rising edge
+  $rose(req) |-> ##1 ack;
+  
+  // $fell - Signal falling edge  
+  $fell(valid) |-> ##1 !ready;
+  
+  // $stable - Signal unchanged
+  $stable(data) throughout (valid ##1 ready);
+  
+  // $past - Previous value of signal
+  valid |-> (data == $past(data));
+  valid |-> (data == $past(data, 2));        // 2 cycles ago
+  valid |-> (data == $past(data, 1, clk));   // Explicit clock
+  
+  // $countones - Count number of 1s
+  $countones(data) <= 4;
+  
+  // $onehot - Exactly one bit set
+  $onehot(state);
+  
+  // $onehot0 - Zero or one bit set
+  $onehot0(state);
+  
+  // $isunknown - Check for X/Z
+  !$isunknown(data) throughout (valid ##1 ready);
+endproperty
+
+//=============================================================================
+// 9. SEQUENCE METHODS
+//=============================================================================
+
+sequence my_seq;
+  @(posedge clk) req ##1 ack;
+endsequence
+
+property sequence_methods;
+  @(posedge clk)
+  
+  // .triggered - Sequence completed
+  my_seq.triggered |-> data != 0;
+  
+  // .matched - Sequence matched (same as triggered for sequences)
+  my_seq.matched |-> valid;
+  
+  // .ended - For properties, indicates property evaluation ended
+  // (Used with properties, not sequences)
+endproperty
+
+//=============================================================================
+// 10. FIRST_MATCH OPERATOR
+//=============================================================================
+
+property first_match_example;
+  @(posedge clk)
+  // first_match - Consider only first match of sequence
+  req |-> first_match(##[1:5] ack) ##1 done;
+endproperty
+
+//=============================================================================
+// 11. ASSERTION CONTROL KEYWORDS
+//=============================================================================
+
+// Assertion control during simulation
+initial begin
+  // $assertoff - Disable assertions
+  $assertoff(0);                      // Disable all assertions
+  $assertoff(1, sva_examples);        // Disable assertions in this module
+  
+  // $asserton - Enable assertions  
+  $asserton(0);                       // Enable all assertions
+  $asserton(1, sva_examples);         // Enable assertions in this module
+  
+  // Similar for assumptions and coverage
+  $assumeoff(0);
+  $assumeon(0);
+  $coveroff(0);
+  $coveron(0);
+end
+
+//=============================================================================
+// 12. COVERAGE KEYWORDS
+//=============================================================================
+
+// Coverage groups for assertions
+covergroup cg_handshake @(posedge clk);
+  cp_req: coverpoint req;
+  cp_ack: coverpoint ack;
+  cross_req_ack: cross cp_req, cp_ack;
+endgroup
+
+// Sequence and property coverage
+cover_seq: cover property (@(posedge clk) req ##1 ack ##1 done);
+
+//=============================================================================
+// 13. CONDITIONAL ASSERTIONS
+//=============================================================================
+
+property conditional_assertions;
+  @(posedge clk)
+  
+  // disable iff - Disable assertion when condition true
+  disable iff (!reset_n) req |-> ##1 ack;
+  
+  // if-else in properties
+  if (state == 2'b01)
+    req |-> ##1 ack;
+  else
+    req |-> ##2 ack;
+endproperty
+
+//=============================================================================
+// 14. COMPLEX TEMPORAL PATTERNS
+//=============================================================================
+
+// Eventually operator (using [->])
+property eventually_example;
+  @(posedge clk) req |-> s_eventually ack;
+endproperty
+
+// Strong and weak operators
+property strong_weak;
+  @(posedge clk)
+  // Strong eventual - must happen
+  req |-> strong(##[1:10] ack);
+  
+  // Weak eventual - if trace is infinite, must happen
+  req |-> weak(##[1:10] ack);
+endproperty
+
+// Until operators
+property until_example;
+  @(posedge clk)
+  // Strong until
+  valid s_until ready;
+  
+  // Weak until  
+  valid until ready;
+  
+  // Until with
+  valid until_with ready;
+endproperty
+
+//=============================================================================
+// 15. BIND STATEMENTS
+//=============================================================================
+
+// Bind assertions to modules
+bind cpu_module cpu_assertions cpu_assert_inst (
+  .clk(clk),
+  .reset_n(reset_n),
+  .req(req),
+  .ack(ack)
+);
+
+//=============================================================================
+// 16. ASSERTION SEVERITY LEVELS
+//=============================================================================
+
+// Different assertion actions
+property assertion_actions;
+  @(posedge clk) req |-> ##1 ack;
+endproperty
+
+// Assertion with different severity
+fatal_check: assert property (assertion_actions)
+  else $fatal("Critical assertion failed");
+
+error_check: assert property (assertion_actions)  
+  else $error("Error level assertion failed");
+
+warning_check: assert property (assertion_actions)
+  else $warning("Warning level assertion failed");
+
+info_check: assert property (assertion_actions)
+  else $info("Info level assertion failed");
+
+//=============================================================================
+// 17. RANDOMIZED ASSERTIONS (FOR FORMAL VERIFICATION)
+//=============================================================================
+
+// Random variables in assertions (for formal tools)
+property random_property;
+  int delay;
+  @(posedge clk) 
+  (req, delay = $urandom_range(1,5)) |-> ##delay ack;
+endproperty
+
+//=============================================================================
+// 18. ASSERTION INSTANTIATION
+//=============================================================================
+
+// Generic assertion module
+module generic_req_ack_check (
+  input logic clk,
+  input logic req,
+  input logic ack
+);
+  
+  req_ack_property: assert property (@(posedge clk) req |-> ##1 ack);
+  
+endmodule
+
+// Instantiate assertion module
+generic_req_ack_check req_ack_checker (
+  .clk(clk),
+  .req(req), 
+  .ack(ack)
+);
+
+endmodule
+
+//=============================================================================
+// SUMMARY OF SVA KEYWORDS BY CATEGORY
+//=============================================================================
+
+/*
+ASSERTION DECLARATIONS:
+- assert        : Assertion statement
+- assume        : Assumption statement  
+- cover         : Coverage statement
+- property      : Property definition
+- sequence      : Sequence definition
+- endproperty   : End property
+- endsequence   : End sequence
+
+TEMPORAL OPERATORS:
+- ##            : Fixed delay (## or ##n or ##[m:n])
+- [*]           : Consecutive repetition
+- [->]          : Goto repetition (non-consecutive)
+- [=]           : Non-consecutive repetition, ends on last match
+- @             : Clocking operator
+- iff           : If and only if (for clocking)
+
+IMPLICATION:
+- |->           : Overlapping implication
+- |=>           : Non-overlapping implication
+
+LOGICAL OPERATORS:
+- and           : Logical AND for sequences
+- or            : Logical OR for sequences  
+- not           : Logical NOT
+- intersect     : Sequence intersection
+- within        : First sequence within second
+- throughout    : Signal stable throughout sequence
+
+SYSTEM FUNCTIONS:
+- $rose         : Rising edge detection
+- $fell         : Falling edge detection
+- $stable       : Signal stability
+- $past         : Previous value
+- $countones    : Count 1 bits
+- $onehot       : Exactly one bit set
+- $onehot0      : Zero or one bit set
+- $isunknown    : Check for X/Z values
+
+SEQUENCE METHODS:
+- .triggered    : Sequence completion
+- .matched      : Sequence match
+- .ended        : Property evaluation end
+
+CONTROL OPERATORS:
+- first_match   : First matching occurrence
+- strong        : Strong temporal operator
+- weak          : Weak temporal operator
+- s_until       : Strong until
+- until         : Weak until
+- until_with    : Until with
+- s_eventually  : Strong eventually
+- eventually    : Weak eventually
+
+CONDITIONAL:
+- disable iff   : Disable condition
+- if/else       : Conditional properties
+
+ASSERTION CONTROL:
+- $assertoff    : Disable assertions
+- $asserton     : Enable assertions
+- $assumeoff    : Disable assumptions
+- $assumeon     : Enable assumptions
+- $coveroff     : Disable coverage
+- $coveron      : Enable coverage
+
+SEVERITY ACTIONS:
+- $fatal        : Fatal error
+- $error        : Error message
+- $warning      : Warning message
+- $info         : Information message
+- $display      : Display message
+
+BINDING:
+- bind          : Bind assertions to modules
+
+EDGE DETECTION:
+- posedge       : Positive clock edge
+- negedge       : Negative clock edge
+- edge          : Any clock edge
+
+REPETITION RANGES:
+- [n]           : Exactly n times
+- [m:n]         : Between m and n times
+- [m:$]         : m to infinite times
+- [*]           : Zero or more times
+- [+]           : One or more times
+*/
